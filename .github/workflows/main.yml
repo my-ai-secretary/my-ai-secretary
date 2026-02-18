@@ -1,0 +1,30 @@
+name: Daily AI Report
+on:
+  schedule:
+    # 한국 시간 새벽 6시는 세계 표준시(UTC)로 전날 오후 9시 입니다.
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          Python-version: '3.10'
+
+      - name: Install dependencies
+        run:
+          pip install requests google-generativeai
+
+      - name : Run Secretary
+        env:
+          NEWS_API_KEY: ${{ secrets.NEWS-API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MY_EMAIL: ${{ secrets.MY_EMAIL }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        run: python secretary.py  
