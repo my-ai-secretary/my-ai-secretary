@@ -27,4 +27,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MY_EMAIL: ${{ secrets.MY_EMAIL }}
           APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-        run: python secretary.py  
+        run: 
+          1s -R  # 현재 무슨 파일이 있는지 목록을 출력해봐 (확인용)
+          python secretary.py  
