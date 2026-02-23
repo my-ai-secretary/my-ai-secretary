@@ -18,7 +18,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install requests google-generativeai
+        run: pip install requests google-generativeai yfinance
 
       - name: Run Secretary
         env:
