@@ -12,86 +12,60 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 MY_EMAIL = os.environ.get('MY_EMAIL')
 APP_PASSWORD = os.environ.get('APP_PASSWORD')
 
-def get_quantitative_data():
-    """핵심 지표와 주가를 소수점 단위까지 정밀하게 가져옵니다."""
-    assets = {
-        "10Y_Treasury": "^TNX",
-        "Nvidia": "NVDA",
-        "Samsung_Elec": "005930.KS",
-        "TSMC": "TSM",
-        "Microsoft": "MSFT",
-        "Alphabet": "GOOGL"
-    }
-    stats = {}
-    for name, ticker in assets.items():
+def get_market_data():
+    tickers = {"10Y_Treasury": "^TNX", "Nvidia": "NVDA", "Samsung": "005930.KS", "TSMC": "TSM", "MSFT": "MSFT"}
+    results = {}
+    for name, tkr in tickers.items():
         try:
-            t = yf.Ticker(ticker)
+            t = yf.Ticker(tkr)
             h = t.history(period="2d")
-            if len(h) >= 2:
-                curr = h['Close'].iloc[-1]
-                prev = h['Close'].iloc[-2]
-                diff = curr - prev
-                pct = (diff / prev) * 100
-                stats[name] = f"Price: {curr:.2f} | Change: {diff:+.2f} ({pct:+.2f}%)"
-        except:
-            stats[name] = "Data Fetch Error"
-    return stats
+            curr, prev = h['Close'].iloc[-1], h['Close'].iloc[-2]
+            results[name] = f"{curr:.2f} ({((curr-prev)/prev)*100:+.2f}%)"
+        except: results[name] = "N/A"
+    return results
 
 def run():
     try:
-        # 1. 정량 데이터 수집
-        raw_data = get_quantitative_data()
-
-        # 2. 공시 및 수치 위주 뉴스 수집
-        query = "(Nvidia OR Samsung OR TSMC) AND (insider selling OR SEC filing OR Q1 earnings OR revenue guidance)"
+        data = get_market_data()
+        query = "(Nvidia OR Samsung OR TSMC) AND (insider selling OR SEC filing OR earnings OR disclosure)"
         url = f"https://newsapi.org/v2/everything?q={query}&language=en&sortBy=publishedAt&apiKey={NEWS_API_KEY}"
-        res = requests.get(url).json()
-        articles = res.get('articles', [])[:7]
-        news_str = "\n".join([f"- [{a['source']['name']}] {a['title']}" for a in articles])
+        news = "\n".join([f"- {a['title']}" for a in requests.get(url).json().get('articles', [])[:8]])
 
-        # 3. AI 분석 (창의성 0, 팩트 100 모드)
         genai.configure(api_key=GEMINI_API_KEY)
-        # Temperature를 0으로 설정하여 헛소리를 원천 차단합니다.
-        model = genai.GenerativeModel('gemini-1.5-flash', 
-                                      generation_config={"temperature": 0})
+        
+        # [핵심 변경] 모델을 Pro로 격상하고, 엄격한 출력을 강제함
+        model = genai.GenerativeModel('gemini-1.5-pro') 
         
         prompt = f"""
-        [시스템 명령: 당신은 숫자에 미친 퀀트 애널리스트입니다.]
-        아래 지침을 어길 시 보고서는 폐기됩니다.
+        [DATA-ONLY REPORT COMMAND]
+        당신은 감정이 없는 로봇 분석가입니다. 아래 지침을 1글자라도 위반 시 시스템은 종료됩니다.
+
+        1. 금지 사항: '어르신', '65세', '투자자님', '안전', '지혜', '현명', '조언', '기원' 등 모든 감성적 단어.
+        2. 금지 사항: 인삿말(안녕하세요), 맺음말(건강하세요), 훈계(현금 비중을 높이세요 등).
+        3. 필수 사항: 오직 수치와 사실만 기술할 것. 
+        4. 형식:
+           - [시장 수치 요약]: 제공된 {data}를 표로 정리.
+           - [주요 공시/뉴스]: {news}에서 수치 정보가 있는 것만 골라 3개 요약.
+           - [내부자 거래/지분]: 구체적 매도 수량 및 금액 위주 기술.
         
-        1. 금지어: '어르신', '65세', '투자자님', '조언', '신중', '지혜', '은퇴', '안전'.
-        2. 말투: '~함', '~임', '~분석됨' 식의 건조한 개조식 문체만 사용.
-        3. 필수 포함: 모든 분석 문장에는 반드시 숫자(%, $, 원)가 포함되어야 함.
-        4. 내용: 격언이나 교훈은 일절 배제하고 오직 데이터의 '상관계수'와 '변동성'만 논할 것.
-
-        [데이터 소스]
-        - 현재 시장 지표: {raw_data}
-        - 주요 공시 뉴스: {news_str}
-
-        [보고서 형식]
-        # 1. 시장 지표 요약 (Table)
-        # 2. 주요 기업 내부자 거래 및 공시 수치 분석 (Fact)
-        # 3. 금리 변동에 따른 밸류에이션 하락/상승폭 계산 (Calculated)
-        # 4. 결론 (Data-driven only)
+        위 형식 외의 문장은 작성하지 마십시오.
         """
         
         response = model.generate_content(prompt)
         report = response.text
 
-        # 4. 메일 전송
         msg = EmailMessage()
         msg.set_content(report)
-        msg['Subject'] = f"📊 [HARD DATA] {datetime.now().strftime('%Y-%m-%d')} 시장 수치 리포트"
+        msg['Subject'] = f"📈 [Quant Report] {datetime.now().strftime('%Y-%m-%d')}"
         msg['From'] = MY_EMAIL
         msg['To'] = MY_EMAIL
 
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(MY_EMAIL, APP_PASSWORD)
             smtp.send_message(msg)
-        print("✅ 데이터 리포트 발송 완료!")
+        print("✅ 리포트 발송 완료")
 
-    except Exception as e:
-        print(f"❌ 에러 발생: {e}")
+    except Exception as e: print(f"❌ 에러: {e}")
 
 if __name__ == "__main__":
     run()
