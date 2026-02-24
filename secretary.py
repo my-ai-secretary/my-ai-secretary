@@ -34,7 +34,7 @@ def run():
         genai.configure(api_key=GEMINI_API_KEY)
         
         # [핵심 변경] 모델을 Pro로 격상하고, 엄격한 출력을 강제함
-        model = genai.GenerativeModel('gemini-1.5-pro') 
+        model = genai.GenerativeModel('gemini-1.5-pro')
         
         prompt = f"""
         [DATA-ONLY REPORT COMMAND]
